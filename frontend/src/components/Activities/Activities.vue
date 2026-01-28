@@ -21,7 +21,8 @@
     <div
       v-else-if="
         activities?.length ||
-        (whatsappMessages.data?.length && title == 'WhatsApp')
+        (whatsappMessages.data?.length && title == 'WhatsApp') ||
+        title == 'Feedback'
       "
       class="activities"
     >
@@ -104,6 +105,12 @@
           :attachments="activities"
           @reload="all_activities.reload() && scroll()"
         />
+      </div>
+      <div
+        v-else-if="title == 'Feedback' && doctype === 'CRM Lead'"
+        class="px-3 pb-3 sm:px-10 sm:pb-5"
+      >
+        <LeadFeedbackTab :lead="docname" />
       </div>
       <div
         v-else
@@ -429,6 +436,7 @@ import CallArea from '@/components/Activities/CallArea.vue'
 import NoteArea from '@/components/Activities/NoteArea.vue'
 import TaskArea from '@/components/Activities/TaskArea.vue'
 import AttachmentArea from '@/components/Activities/AttachmentArea.vue'
+import LeadFeedbackTab from '@/components/Activities/LeadFeedbackTab.vue'
 import DataFields from '@/components/Activities/DataFields.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ActivityIcon from '@/components/Icons/ActivityIcon.vue'

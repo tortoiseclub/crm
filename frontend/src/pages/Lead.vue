@@ -419,6 +419,11 @@ const tabs = computed(() => {
       icon: NoteIcon,
     },
     {
+      name: 'Feedback',
+      label: __('Feedback'),
+      icon: CommentIcon,
+    },
+    {
       name: 'Attachments',
       label: __('Attachments'),
       icon: AttachmentIcon,

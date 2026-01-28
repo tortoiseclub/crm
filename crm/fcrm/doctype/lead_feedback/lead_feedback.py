@@ -55,7 +55,17 @@ class LeadFeedback(Document):
 			self.submitted_by = frappe.session.user
 
 	def _validate_responses(self):
-		"""Ensure mandatory questions are answered and Select answers are valid."""
+		"""Ensure mandatory questions are answered and Select answers are valid.
+
+		For drafts, we allow saving without answers so that the UI can create
+		an empty feedback instance and progressively fill it. Strict validation
+		only applies when the feedback is being submitted (status = Submitted)
+		or after submission (docstatus = 1).
+		"""
+		if self.status != "Submitted" and self.docstatus != 1:
+			# Skip validation for drafts / intermediate saves
+			return
+
 		for resp in self.responses:
 			question = frappe.get_doc("Feedback Form Question", resp.question)
 
