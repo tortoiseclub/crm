@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-01-28 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "question",
+  "question_label",
+  "question_type",
+  "is_mandatory",
+  "question_options_raw",
+  "answer_choice",
+  "answer_text",
+  "answer_value",
+  "answer_label"
+ ],
+ "fields": [
+  {
+   "fieldname": "question",
+   "fieldtype": "Link",
+   "label": "Question",
+   "options": "Feedback Form Question"
+  },
+  {
+   "fieldname": "question_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Question Label",
+   "read_only": 1,
+   "fetch_from": "question.question_label"
+  },
+  {
+   "fieldname": "question_type",
+   "fieldtype": "Data",
+   "label": "Question Type",
+   "read_only": 1,
+   "fetch_from": "question.question_type"
+  },
+  {
+   "fieldname": "is_mandatory",
+   "fieldtype": "Check",
+   "label": "Mandatory",
+   "read_only": 1,
+   "fetch_from": "question.is_mandatory"
+  },
+  {
+   "fieldname": "question_options_raw",
+   "fieldtype": "Small Text",
+   "label": "Question Options (raw)",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "answer_choice",
+   "fieldtype": "Select",
+   "label": "Answer (Choice)",
+   "depends_on": "eval:doc.question_type===\"Select\"",
+   "mandatory_depends_on": "eval:doc.question_type===\"Select\" && doc.is_mandatory"
+  },
+  {
+   "fieldname": "answer_text",
+   "fieldtype": "Small Text",
+   "label": "Answer (Text)",
+   "depends_on": "eval:doc.question_type===\"Text\"",
+   "mandatory_depends_on": "eval:doc.question_type===\"Text\" && doc.is_mandatory"
+  },
+  {
+   "fieldname": "answer_value",
+   "fieldtype": "Select",
+   "in_list_view": 0,
+   "label": "Answer (Value)",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "answer_label",
+   "fieldtype": "Data",
+   "label": "Answer (Label)"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-01-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "Lead Feedback Response",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "All",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
+

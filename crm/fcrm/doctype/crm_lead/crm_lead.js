@@ -4,6 +4,28 @@
 frappe.ui.form.on("CRM Lead", {
   refresh(frm) {
     frm.add_web_link(`/crm/leads/${frm.doc.name}`, __("Open in Portal"));
+
+    if (!frm.is_new()) {
+      frm.add_custom_button(
+        __("New Feedback"),
+        () => {
+          frappe.new_doc("Lead Feedback", {
+            lead: frm.doc.name,
+          });
+        },
+        __("Feedback"),
+      );
+
+      frm.add_custom_button(
+        __("View Feedback"),
+        () => {
+          frappe.set_route("List", "Lead Feedback", {
+            lead: frm.doc.name,
+          });
+        },
+        __("Feedback"),
+      );
+    }
   },
   update_total: function (frm) {
     let total = 0;

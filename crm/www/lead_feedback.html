@@ -1,0 +1,43 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Lead Feedback{% endblock %}
+
+{% block page_content %}
+<div class="lead-feedback-form">
+  <h2>Lead Feedback</h2>
+  <p>{{ _("Please share your feedback. Fields marked with * are required.") }}</p>
+
+  <form method="post">
+    <input type="hidden" name="token" value="{{ frappe.form_dict.token }}" />
+    {% for q in questions %}
+      <div class="form-group">
+        <label>
+          {{ q.label }}
+          {% if q.is_mandatory %}<span style="color: red;">*</span>{% endif %}
+        </label>
+
+        {% if q.type == "Select" %}
+          <select name="answer_{{ q.rowname }}" class="form-control" {% if q.is_mandatory %}required{% endif %}>
+            <option value="">{{ _("Select an option") }}</option>
+            {% for opt in q.options %}
+              <option value="{{ opt.value }}">{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+        {% else %}
+          <textarea
+            name="answer_{{ q.rowname }}"
+            class="form-control"
+            rows="3"
+            {% if q.is_mandatory %}required{% endif %}
+          >{{ q.current_answer or "" }}</textarea>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <button type="submit" class="btn btn-primary">
+      {{ _("Submit Feedback") }}
+    </button>
+  </form>
+</div>
+{% endblock %}
+
