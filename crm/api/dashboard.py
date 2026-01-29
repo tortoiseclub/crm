@@ -1247,6 +1247,16 @@ def get_total_feedback_submissions(from_date, to_date, user="", filters=None):
 	"""
 	Get count of submitted Lead Feedback records in the period.
 	"""
+	if not filters or not filters.get("feedback_form"):
+		return {
+			"title": _("Total feedback submissions"),
+			"tooltip": _("Number of submitted feedback forms in period"),
+			"value": 0,
+			"delta": 0,
+			"deltaSuffix": "%",
+			"requiresFilter": True,
+			"hint": _("Please select a Feedback Form to view submissions"),
+		}
 	if not from_date or not to_date:
 		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
 		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
@@ -1471,6 +1481,18 @@ def get_feedback_responses_by_question(from_date, to_date, user="", filters=None
 	"""
 	Get aggregated Select-question response counts per question/option for axis chart.
 	"""
+	if not filters or not filters.get("feedback_form"):
+		return {
+			"data": [],
+			"title": _("Feedback responses by question"),
+			"subtitle": _("Aggregated Select answers per question"),
+			"xAxis": {"title": _("Question"), "key": "question", "type": "category"},
+			"yAxis": {"title": _("Count")},
+			"stacked": True,
+			"series": [],
+			"requiresFilter": True,
+			"hint": _("Please select a Feedback Form to view responses"),
+		}
 	if not from_date or not to_date:
 		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
 		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
@@ -1541,6 +1563,20 @@ def get_feedback_text_responses(from_date, to_date, user="", filters=None):
 	"""
 	Get text question responses as a list with lead info for table display.
 	"""
+	if not filters or not filters.get("feedback_form"):
+		return {
+			"data": [],
+			"title": _("Feedback text responses"),
+			"subtitle": _("Text answers from submitted feedback"),
+			"columns": [
+				{"key": "question_label", "label": _("Question")},
+				{"key": "lead_name", "label": _("Lead")},
+				{"key": "answer_text", "label": _("Answer")},
+				{"key": "submitted_on", "label": _("Submitted on")},
+			],
+			"requiresFilter": True,
+			"hint": _("Please select a Feedback Form to view responses"),
+		}
 	if not from_date or not to_date:
 		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
 		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())

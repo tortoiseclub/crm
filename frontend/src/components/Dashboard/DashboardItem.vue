@@ -2,12 +2,19 @@
   <div class="h-full w-full">
     <div
       v-if="item.type == 'number_chart'"
-      class="flex h-full w-full rounded shadow overflow-hidden cursor-pointer"
+      class="flex h-full w-full rounded shadow overflow-hidden"
+      :class="item.data?.requiresFilter ? '' : 'cursor-pointer'"
     >
-      <Tooltip :text="__(item.data.tooltip)">
+      <div
+        v-if="item.data?.requiresFilter"
+        class="h-full w-full flex flex-col items-center justify-center p-4 rounded-md bg-surface-white"
+      >
+        <div class="font-medium text-base mb-2">{{ item.data.title }}</div>
+        <div class="text-sm text-ink-gray-5 text-center">{{ item.data.hint }}</div>
+      </div>
+      <Tooltip v-else-if="item.data" :text="__(item.data.tooltip)">
         <NumberChart
           class="!items-start"
-          v-if="item.data"
           :key="index"
           :config="item.data"
         />
@@ -24,7 +31,14 @@
       v-else-if="item.type == 'axis_chart'"
       class="h-full w-full rounded-md bg-surface-white shadow"
     >
-      <AxisChart v-if="item.data" :config="item.data" />
+      <div
+        v-if="item.data?.requiresFilter"
+        class="h-full flex flex-col items-center justify-center p-4"
+      >
+        <div class="font-medium text-base mb-2">{{ item.data.title }}</div>
+        <div class="text-sm text-ink-gray-5 text-center">{{ item.data.hint }}</div>
+      </div>
+      <AxisChart v-else-if="item.data" :config="item.data" />
     </div>
     <div
       v-else-if="item.type == 'donut_chart'"
@@ -36,7 +50,14 @@
       v-else-if="item.type == 'table_chart'"
       class="h-full w-full rounded-md bg-surface-white shadow overflow-auto flex flex-col"
     >
-      <div v-if="item.data" class="p-3 flex flex-col h-full">
+      <div
+        v-if="item.data?.requiresFilter"
+        class="h-full flex flex-col items-center justify-center p-4"
+      >
+        <div class="font-medium text-base mb-2">{{ item.data.title }}</div>
+        <div class="text-sm text-ink-gray-5 text-center">{{ item.data.hint }}</div>
+      </div>
+      <div v-else-if="item.data" class="p-3 flex flex-col h-full">
         <div class="font-medium text-base mb-2">{{ item.data.title }}</div>
         <div v-if="item.data.subtitle" class="text-sm text-ink-gray-5 mb-2">
           {{ item.data.subtitle }}
