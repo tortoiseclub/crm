@@ -32,6 +32,51 @@
     >
       <DonutChart v-if="item.data" :config="item.data" />
     </div>
+    <div
+      v-else-if="item.type == 'table_chart'"
+      class="h-full w-full rounded-md bg-surface-white shadow overflow-auto flex flex-col"
+    >
+      <div v-if="item.data" class="p-3 flex flex-col h-full">
+        <div class="font-medium text-base mb-2">{{ item.data.title }}</div>
+        <div v-if="item.data.subtitle" class="text-sm text-ink-gray-5 mb-2">
+          {{ item.data.subtitle }}
+        </div>
+        <table class="w-full text-sm border-collapse">
+          <thead>
+            <tr class="border-b border-outline-gray-2">
+              <th
+                v-for="col in (item.data.columns || [])"
+                :key="col.key"
+                class="text-left py-2 px-2 font-medium"
+              >
+                {{ col.label }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(row, idx) in (item.data.data || [])"
+              :key="idx"
+              class="border-b border-outline-gray-1"
+            >
+              <td
+                v-for="col in (item.data.columns || [])"
+                :key="col.key"
+                class="py-2 px-2"
+              >
+                {{ row[col.key] }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div
+          v-if="!item.data.data?.length"
+          class="flex-1 flex items-center justify-center text-ink-gray-5"
+        >
+          {{ __('No data') }}
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 <script setup>

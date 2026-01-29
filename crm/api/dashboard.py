@@ -1,7 +1,9 @@
+import inspect
 import json
 
 import frappe
 from frappe import _
+from frappe.utils import cint
 
 from crm.fcrm.doctype.crm_dashboard.crm_dashboard import create_default_manager_dashboard
 from crm.utils import sales_user_only
@@ -15,10 +17,15 @@ def reset_to_default():
 
 @frappe.whitelist()
 @sales_user_only
-def get_dashboard(from_date="", to_date="", user=""):
+def get_dashboard(from_date="", to_date="", user="", filters=None):
 	"""
 	Get the dashboard data for the CRM dashboard.
 	"""
+	if isinstance(filters, str) and filters:
+		try:
+			filters = json.loads(filters)
+		except Exception:
+			filters = None
 
 	if not from_date or not to_date:
 		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
@@ -45,7 +52,11 @@ def get_dashboard(from_date="", to_date="", user=""):
 		method_name = f"get_{l['name']}"
 		if hasattr(frappe.get_attr("crm.api.dashboard"), method_name):
 			method = getattr(frappe.get_attr("crm.api.dashboard"), method_name)
-			l["data"] = method(from_date, to_date, user)
+			sig = inspect.signature(method)
+			if len(sig.parameters) >= 4:
+				l["data"] = method(from_date, to_date, user, filters)
+			else:
+				l["data"] = method(from_date, to_date, user)
 		else:
 			l["data"] = None
 
@@ -54,10 +65,16 @@ def get_dashboard(from_date="", to_date="", user=""):
 
 @frappe.whitelist()
 @sales_user_only
-def get_chart(name, type, from_date="", to_date="", user=""):
+def get_chart(name, type, from_date="", to_date="", user="", filters=None):
 	"""
-	Get number chart data for the dashboard.
+	Get chart data for the dashboard.
 	"""
+	if isinstance(filters, str) and filters:
+		try:
+			filters = json.loads(filters)
+		except Exception:
+			filters = None
+
 	if not from_date or not to_date:
 		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
 		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
@@ -72,6 +89,9 @@ def get_chart(name, type, from_date="", to_date="", user=""):
 	method_name = f"get_{name}"
 	if hasattr(frappe.get_attr("crm.api.dashboard"), method_name):
 		method = getattr(frappe.get_attr("crm.api.dashboard"), method_name)
+		sig = inspect.signature(method)
+		if len(sig.parameters) >= 4:
+			return method(from_date, to_date, user, filters)
 		return method(from_date, to_date, user)
 	else:
 		return {"error": _("Invalid chart name")}
@@ -1192,3 +1212,385 @@ def get_deal_status_change_counts(from_date, to_date, deal_conds="", filters=Non
 		as_dict=True,
 	)
 	return result or []
+
+
+def _get_lead_feedback_filter_conditions(filters, params, lead_alias="l", feedback_alias="lf"):
+	"""
+	Build SQL conditions and params for lead/feedback analytics filtering.
+	Updates params in place. Returns conds string for WHERE clause.
+	"""
+	conds = ""
+	if not filters:
+		return conds
+	if filters.get("feedback_form"):
+		conds += f" AND {feedback_alias}.feedback_form = %(feedback_form)s"
+		params["feedback_form"] = filters.get("feedback_form")
+	if filters.get("lead_status"):
+		conds += f" AND {lead_alias}.status = %(lead_status)s"
+		params["lead_status"] = filters.get("lead_status")
+	if filters.get("lead_source"):
+		conds += f" AND {lead_alias}.source = %(lead_source)s"
+		params["lead_source"] = filters.get("lead_source")
+	if filters.get("territory"):
+		conds += f" AND {lead_alias}.territory = %(territory)s"
+		params["territory"] = filters.get("territory")
+	if filters.get("industry"):
+		conds += f" AND {lead_alias}.industry = %(industry)s"
+		params["industry"] = filters.get("industry")
+	if filters.get("converted") is not None:
+		conds += f" AND {lead_alias}.converted = %(converted)s"
+		params["converted"] = cint(filters.get("converted"))
+	return conds
+
+
+def get_total_feedback_submissions(from_date, to_date, user="", filters=None):
+	"""
+	Get count of submitted Lead Feedback records in the period.
+	"""
+	if not from_date or not to_date:
+		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
+		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
+
+	conds = ""
+	params = {
+		"from_date": from_date,
+		"to_date": to_date,
+		"prev_from_date": frappe.utils.add_days(
+			from_date, -max(1, frappe.utils.date_diff(to_date, from_date))
+		),
+	}
+	if user:
+		conds += " AND l.lead_owner = %(user)s"
+		params["user"] = user
+	conds += _get_lead_feedback_filter_conditions(filters, params)
+
+	result = frappe.db.sql(
+		f"""
+		SELECT
+			COUNT(CASE
+				WHEN lf.status = 'Submitted'
+					AND lf.submitted_on >= %(from_date)s
+					AND lf.submitted_on < DATE_ADD(%(to_date)s, INTERVAL 1 DAY)
+				THEN lf.name
+				ELSE NULL
+			END) AS current_count,
+			COUNT(CASE
+				WHEN lf.status = 'Submitted'
+					AND lf.submitted_on >= %(prev_from_date)s
+					AND lf.submitted_on < %(from_date)s
+				THEN lf.name
+				ELSE NULL
+			END) AS prev_count
+		FROM `tabLead Feedback` lf
+		JOIN `tabCRM Lead` l ON lf.lead = l.name
+		WHERE 1=1
+		{conds}
+		""",
+		params,
+		as_dict=1,
+	)
+	current = (result[0].current_count or 0) if result else 0
+	prev = (result[0].prev_count or 0) if result else 0
+	delta = (current - prev) / prev * 100 if prev else 0
+	return {
+		"title": _("Total feedback submissions"),
+		"tooltip": _("Number of submitted feedback forms in period"),
+		"value": current,
+		"delta": delta,
+		"deltaSuffix": "%",
+	}
+
+
+def get_leads_contacted(from_date, to_date, user="", filters=None):
+	"""
+	Get count of leads with status 'Contacted' in the period.
+	"""
+	if not from_date or not to_date:
+		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
+		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
+
+	diff = max(1, frappe.utils.date_diff(to_date, from_date))
+	lead_conds = " AND status = 'Contacted'"
+	params = {
+		"from_date": from_date,
+		"to_date": to_date,
+		"prev_from_date": frappe.utils.add_days(from_date, -diff),
+	}
+	if user:
+		lead_conds += " AND lead_owner = %(user)s"
+		params["user"] = user
+	if filters:
+		if filters.get("lead_source"):
+			lead_conds += " AND source = %(lead_source)s"
+			params["lead_source"] = filters.get("lead_source")
+		if filters.get("territory"):
+			lead_conds += " AND territory = %(territory)s"
+			params["territory"] = filters.get("territory")
+		if filters.get("industry"):
+			lead_conds += " AND industry = %(industry)s"
+			params["industry"] = filters.get("industry")
+		if filters.get("converted") is not None:
+			lead_conds += " AND converted = %(converted)s"
+			params["converted"] = cint(filters.get("converted"))
+
+	result = frappe.db.sql(
+		f"""
+		SELECT
+			COUNT(CASE
+				WHEN creation >= %(from_date)s AND creation < DATE_ADD(%(to_date)s, INTERVAL 1 DAY)
+				{lead_conds}
+				THEN name
+				ELSE NULL
+			END) AS current_count,
+			COUNT(CASE
+				WHEN creation >= %(prev_from_date)s AND creation < %(from_date)s
+				{lead_conds}
+				THEN name
+				ELSE NULL
+			END) AS prev_count
+		FROM `tabCRM Lead`
+		WHERE 1=1
+		""",
+		params,
+		as_dict=1,
+	)
+	current = (result[0].current_count or 0) if result else 0
+	prev = (result[0].prev_count or 0) if result else 0
+	delta = (current - prev) / prev * 100 if prev else 0
+	return {
+		"title": _("Leads contacted"),
+		"tooltip": _("Leads with status Contacted"),
+		"value": current,
+		"delta": delta,
+		"deltaSuffix": "%",
+	}
+
+
+def get_leads_by_status_donut(from_date, to_date, user="", filters=None):
+	"""
+	Get lead count by status for donut chart.
+	"""
+	if not from_date or not to_date:
+		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
+		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
+
+	lead_conds_plain = ""
+	params = {"from": from_date, "to": to_date}
+	if user:
+		lead_conds_plain += " AND lead_owner = %(user)s"
+	if filters:
+		if filters.get("lead_source"):
+			lead_conds_plain += " AND source = %(lead_source)s"
+			params.setdefault("lead_source", filters.get("lead_source"))
+		if filters.get("territory"):
+			lead_conds_plain += " AND territory = %(territory)s"
+			params.setdefault("territory", filters.get("territory"))
+		if filters.get("industry"):
+			lead_conds_plain += " AND industry = %(industry)s"
+			params.setdefault("industry", filters.get("industry"))
+		if filters.get("converted") is not None:
+			lead_conds_plain += " AND converted = %(converted)s"
+			params.setdefault("converted", cint(filters.get("converted")))
+		if filters.get("lead_status"):
+			lead_conds_plain += " AND status = %(lead_status)s"
+			params.setdefault("lead_status", filters.get("lead_status"))
+
+	result = frappe.db.sql(
+		f"""
+		SELECT status, COUNT(*) AS count
+		FROM `tabCRM Lead`
+		WHERE DATE(creation) BETWEEN %(from)s AND %(to)s
+		{lead_conds_plain}
+		GROUP BY status
+		ORDER BY count DESC
+		""",
+		params,
+		as_dict=True,
+	)
+	return {
+		"data": result or [],
+		"title": _("Leads by status"),
+		"subtitle": _("Lead distribution by status"),
+		"categoryColumn": "status",
+		"valueColumn": "count",
+	}
+
+
+def get_leads_by_status_axis(from_date, to_date, user="", filters=None):
+	"""
+	Get lead count by status for axis/bar chart.
+	"""
+	if not from_date or not to_date:
+		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
+		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
+
+	lead_conds_plain = ""
+	params = {"from": from_date, "to": to_date}
+	if user:
+		lead_conds_plain += " AND lead_owner = %(user)s"
+		params["user"] = user
+	if filters:
+		if filters.get("lead_source"):
+			lead_conds_plain += " AND source = %(lead_source)s"
+			params.setdefault("lead_source", filters.get("lead_source"))
+		if filters.get("territory"):
+			lead_conds_plain += " AND territory = %(territory)s"
+			params.setdefault("territory", filters.get("territory"))
+		if filters.get("industry"):
+			lead_conds_plain += " AND industry = %(industry)s"
+			params.setdefault("industry", filters.get("industry"))
+		if filters.get("converted") is not None:
+			lead_conds_plain += " AND converted = %(converted)s"
+			params.setdefault("converted", cint(filters.get("converted")))
+		if filters.get("lead_status"):
+			lead_conds_plain += " AND status = %(lead_status)s"
+			params.setdefault("lead_status", filters.get("lead_status"))
+
+	result = frappe.db.sql(
+		f"""
+		SELECT status AS stage, COUNT(*) AS count
+		FROM `tabCRM Lead`
+		WHERE DATE(creation) BETWEEN %(from)s AND %(to)s
+		{lead_conds_plain}
+		GROUP BY status
+		ORDER BY count DESC
+		""",
+		params,
+		as_dict=True,
+	)
+	return {
+		"data": result or [],
+		"title": _("Leads by status"),
+		"xAxis": {"title": _("Status"), "key": "stage", "type": "category"},
+		"yAxis": {"title": _("Count")},
+		"series": [{"name": "count", "type": "bar"}],
+	}
+
+
+def get_feedback_responses_by_question(from_date, to_date, user="", filters=None):
+	"""
+	Get aggregated Select-question response counts per question/option for axis chart.
+	"""
+	if not from_date or not to_date:
+		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
+		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
+
+	conds = ""
+	params = {
+		"from_date": from_date,
+		"to_date": to_date,
+	}
+	if user:
+		conds += " AND l.lead_owner = %(user)s"
+		params["user"] = user
+	conds += _get_lead_feedback_filter_conditions(filters, params)
+
+	rows = frappe.db.sql(
+		f"""
+		SELECT
+			ffq.question_code,
+			ffq.question_label,
+			COALESCE(lfr.answer_choice, lfr.answer_label, '') AS answer_choice,
+			COUNT(*) AS count
+		FROM `tabLead Feedback Response` lfr
+		JOIN `tabLead Feedback` lf ON lfr.parent = lf.name
+		JOIN `tabFeedback Form Question` ffq ON lfr.question = ffq.name
+		JOIN `tabCRM Lead` l ON lf.lead = l.name
+		WHERE lf.status = 'Submitted'
+			AND lf.submitted_on >= %(from_date)s
+			AND lf.submitted_on < DATE_ADD(%(to_date)s, INTERVAL 1 DAY)
+			AND ffq.question_type = 'Select'
+		{conds}
+		GROUP BY ffq.question_code, ffq.question_label, COALESCE(lfr.answer_choice, lfr.answer_label, '')
+		ORDER BY ffq.question_code, count DESC
+		""",
+		params,
+		as_dict=True,
+	)
+	# Pivot into axis chart format: one row per question, columns = option names
+	from collections import defaultdict
+	by_question = defaultdict(dict)
+	all_options = set()
+	for r in rows or []:
+		q = r.get("question_label") or r.get("question_code") or ""
+		opt = (r.get("answer_choice") or "").strip() or _("(Blank)")
+		all_options.add(opt)
+		by_question[q][opt] = (by_question[q].get(opt) or 0) + (r.get("count") or 0)
+	all_options = sorted(all_options)
+	data = []
+	for q, opts in by_question.items():
+		row = {"question": q}
+		for o in all_options:
+			row[o] = opts.get(o, 0)
+		data.append(row)
+	series = [{"name": o, "type": "bar"} for o in all_options]
+	if not series:
+		series = [{"name": "count", "type": "bar"}]
+	return {
+		"data": data or [],
+		"title": _("Feedback responses by question"),
+		"subtitle": _("Aggregated Select answers per question"),
+		"xAxis": {"title": _("Question"), "key": "question", "type": "category"},
+		"yAxis": {"title": _("Count")},
+		"stacked": True,
+		"series": series,
+	}
+
+
+def get_feedback_text_responses(from_date, to_date, user="", filters=None):
+	"""
+	Get text question responses as a list with lead info for table display.
+	"""
+	if not from_date or not to_date:
+		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
+		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
+
+	conds = ""
+	params = {
+		"from_date": from_date,
+		"to_date": to_date,
+	}
+	if user:
+		conds += " AND l.lead_owner = %(user)s"
+		params["user"] = user
+	conds += _get_lead_feedback_filter_conditions(filters, params)
+
+	result = frappe.db.sql(
+		f"""
+		SELECT
+			ffq.question_label,
+			l.name AS lead,
+			l.lead_name,
+			lfr.answer_text,
+			lf.submitted_on
+		FROM `tabLead Feedback Response` lfr
+		JOIN `tabLead Feedback` lf ON lfr.parent = lf.name
+		JOIN `tabFeedback Form Question` ffq ON lfr.question = ffq.name
+		JOIN `tabCRM Lead` l ON lf.lead = l.name
+		WHERE lf.status = 'Submitted'
+			AND lf.submitted_on >= %(from_date)s
+			AND lf.submitted_on < DATE_ADD(%(to_date)s, INTERVAL 1 DAY)
+			AND ffq.question_type = 'Text'
+			AND (lfr.answer_text IS NOT NULL AND lfr.answer_text != '')
+		{conds}
+		ORDER BY lf.submitted_on DESC
+		LIMIT 500
+		""",
+		params,
+		as_dict=True,
+	)
+	# Serialize datetime for JSON
+	for row in result or []:
+		if row.get("submitted_on"):
+			row["submitted_on"] = str(row["submitted_on"])
+	return {
+		"data": result or [],
+		"title": _("Feedback text responses"),
+		"subtitle": _("Text answers from submitted feedback"),
+		"columns": [
+			{"key": "question_label", "label": _("Question")},
+			{"key": "lead_name", "label": _("Lead")},
+			{"key": "answer_text", "label": _("Answer")},
+			{"key": "submitted_on", "label": _("Submitted on")},
+		],
+	}

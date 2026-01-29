@@ -112,6 +112,42 @@
           </Tooltip>
         </template>
       </Link>
+      <Link
+        class="form-control w-40"
+        variant="outline"
+        :value="filters.feedback_form"
+        doctype="Feedback Form"
+        @change="(v) => updateFilter('feedback_form', v)"
+        :placeholder="__('Feedback form')"
+      />
+      <Link
+        class="form-control w-40"
+        variant="outline"
+        :value="filters.lead_status"
+        doctype="CRM Lead Status"
+        @change="(v) => updateFilter('lead_status', v)"
+        :placeholder="__('Lead status')"
+      />
+      <Link
+        class="form-control w-40"
+        variant="outline"
+        :value="filters.lead_source"
+        doctype="CRM Lead Source"
+        @change="(v) => updateFilter('lead_source', v)"
+        :placeholder="__('Source')"
+      />
+      <FormControl
+        v-model="filters.converted"
+        type="select"
+        class="form-control w-36"
+        :options="[
+          { label: __('All'), value: '' },
+          { label: __('Yes'), value: '1' },
+          { label: __('No'), value: '0' },
+        ]"
+        :placeholder="__('Converted')"
+        @update:modelValue="() => dashboardItems.reload()"
+      />
     </div>
 
     <div class="w-full overflow-y-scroll">
@@ -148,6 +184,7 @@ import {
   createResource,
   DateRangePicker,
   Dropdown,
+  FormControl,
   Tooltip,
 } from 'frappe-ui'
 import { ref, reactive, computed, provide } from 'vue'
@@ -164,6 +201,10 @@ const showAddChartModal = ref(false)
 const filters = reactive({
   period: getLastXDays(),
   user: null,
+  feedback_form: null,
+  lead_status: null,
+  lead_source: null,
+  converted: '',
 })
 
 const fromDate = computed(() => {
@@ -235,11 +276,21 @@ const options = computed(() => [
 const dashboardItems = createResource({
   url: 'crm.api.dashboard.get_dashboard',
   makeParams() {
-    return {
+    const f = {
       from_date: fromDate.value,
       to_date: toDate.value,
       user: filters.user,
     }
+    if (filters.feedback_form || filters.lead_status || filters.lead_source ||
+        filters.converted !== '') {
+      f.filters = JSON.stringify({
+        feedback_form: filters.feedback_form || undefined,
+        lead_status: filters.lead_status || undefined,
+        lead_source: filters.lead_source || undefined,
+        converted: filters.converted === '' ? undefined : parseInt(filters.converted, 10),
+      })
+    }
+    return f
   },
   auto: true,
 })

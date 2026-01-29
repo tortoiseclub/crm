@@ -33,6 +33,13 @@
           :label="__('Donut chart')"
           :options="donutCharts"
         />
+        <FormControl
+          v-if="chartType === 'table_chart'"
+          v-model="tableChart"
+          type="select"
+          :label="__('Table')"
+          :options="tableCharts"
+        />
       </div>
     </template>
     <template #actions>
@@ -69,11 +76,14 @@ const chartTypes = [
   { label: __('Number chart'), value: 'number_chart' },
   { label: __('Axis chart'), value: 'axis_chart' },
   { label: __('Donut chart'), value: 'donut_chart' },
+  { label: __('Table'), value: 'table_chart' },
 ]
 
 const numberChart = ref('')
 const numberCharts = [
   { label: __('Total leads'), value: 'total_leads' },
+  { label: __('Total feedback submissions'), value: 'total_feedback_submissions' },
+  { label: __('Leads contacted'), value: 'leads_contacted' },
   { label: __('Ongoing deals'), value: 'ongoing_deals' },
   { label: __('Avg ongoing deal value'), value: 'average_ongoing_deal_value' },
   { label: __('Won deals'), value: 'won_deals' },
@@ -95,6 +105,8 @@ const axisCharts = [
   { label: __('Forecasted revenue'), value: 'forecasted_revenue' },
   { label: __('Funnel conversion'), value: 'funnel_conversion' },
   { label: __('Deals by ongoing & won stage'), value: 'deals_by_stage_axis' },
+  { label: __('Leads by status'), value: 'leads_by_status_axis' },
+  { label: __('Feedback responses by question'), value: 'feedback_responses_by_question' },
   { label: __('Lost deal reasons'), value: 'lost_deal_reasons' },
   { label: __('Deals by territory'), value: 'deals_by_territory' },
   { label: __('Deals by salesperson'), value: 'deals_by_salesperson' },
@@ -103,8 +115,14 @@ const axisCharts = [
 const donutChart = ref('deals_by_stage_donut')
 const donutCharts = [
   { label: __('Deals by stage'), value: 'deals_by_stage_donut' },
+  { label: __('Leads by status'), value: 'leads_by_status_donut' },
   { label: __('Leads by source'), value: 'leads_by_source' },
   { label: __('Deals by source'), value: 'deals_by_source' },
+]
+
+const tableChart = ref('feedback_text_responses')
+const tableCharts = [
+  { label: __('Feedback text responses'), value: 'feedback_text_responses' },
 ]
 
 async function addChart() {
@@ -126,23 +144,42 @@ async function getChart(type: string) {
       ? numberChart.value
       : type == 'axis_chart'
         ? axisChart.value
-        : donutChart.value
+        : type == 'donut_chart'
+          ? donutChart.value
+          : tableChart.value
 
+  const params: Record<string, unknown> = {
+    name,
+    type,
+    from_date: fromDate.value,
+    to_date: toDate.value,
+    user: filters.user,
+  }
+  if (
+    filters.feedback_form ||
+    filters.lead_status ||
+    filters.lead_source ||
+    (filters.converted !== undefined && filters.converted !== '' && filters.converted !== null)
+  ) {
+    params.filters = JSON.stringify({
+      feedback_form: filters.feedback_form || undefined,
+      lead_status: filters.lead_status || undefined,
+      lead_source: filters.lead_source || undefined,
+      converted:
+        filters.converted === '' || filters.converted == null
+          ? undefined
+          : parseInt(String(filters.converted), 10),
+    })
+  }
   await createResource({
     url: 'crm.api.dashboard.get_chart',
-    params: {
-      name,
-      type,
-      from_date: fromDate.value,
-      to_date: toDate.value,
-      user: filters.user,
-    },
+    params,
     auto: true,
     onSuccess: (data = {}) => {
       let width = 4
       let height = 2
 
-      if (['axis_chart', 'donut_chart'].includes(type)) {
+      if (['axis_chart', 'donut_chart', 'table_chart'].includes(type)) {
         width = 10
         height = 7
       }
