@@ -48,6 +48,7 @@
           ref="activities"
           doctype="CRM Deal"
           :docname="dealId"
+          :linkedLead="doc.lead"
           :tabs="tabs"
           v-model:reload="reload"
           v-model:tabIndex="tabIndex"
@@ -551,6 +552,12 @@ const tabs = computed(() => {
       name: 'Comments',
       label: __('Comments'),
       icon: CommentIcon,
+    },
+    {
+      name: 'Feedback',
+      label: __('Feedback'),
+      icon: CommentIcon,
+      condition: () => !!doc.value?.lead,
     },
     {
       name: 'Data',

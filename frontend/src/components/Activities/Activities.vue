@@ -106,11 +106,11 @@
           @reload="all_activities.reload() && scroll()"
         />
       </div>
-      <div
-        v-else-if="title == 'Feedback' && doctype === 'CRM Lead'"
+  <div
+        v-else-if="title == 'Feedback'"
         class="px-3 pb-3 sm:px-10 sm:pb-5"
       >
-        <LeadFeedbackTab :lead="docname" />
+        <LeadFeedbackTab :lead="feedbackLead" :context="feedbackContext" />
       </div>
       <div
         v-else
@@ -501,6 +501,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  linkedLead: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits(['beforeSave', 'afterSave'])
@@ -513,6 +517,12 @@ const tabIndex = defineModel('tabIndex')
 const { document: _document } = useDocument(props.doctype, props.docname)
 
 const doc = computed(() => _document.doc || {})
+const feedbackLead = computed(() =>
+  props.doctype === 'CRM Deal' ? props.linkedLead : props.docname,
+)
+const feedbackContext = computed(() =>
+  props.doctype === 'CRM Deal' ? 'deal' : 'lead',
+)
 
 const reload_email = ref(false)
 const modalRef = ref(null)
